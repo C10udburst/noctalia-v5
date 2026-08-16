@@ -1,0 +1,23 @@
+id = "cloudburst/driftwm"
+name = "DriftWM Minimap"
+version = "1.0.0"
+description = "DriftWM infinite canvas viewport widget and declarative UI minimap panel for Noctalia"
+author = "cloudburst"
+license = "MIT"
+plugin_api = 26
+
+[[widget]]
+id = "widget"
+name = "DriftWM Viewport Widget"
+entry = "widget.luau"
+
+[[panel]]
+id = "minimap"
+name = "DriftWM Minimap Panel"
+entry = "panel.luau"
+width = 680
+height = 520
+placement = "attached"
+open_near_click = false
+dismiss_on_outside_click = true
+keyboard_focus = "on_demand"
