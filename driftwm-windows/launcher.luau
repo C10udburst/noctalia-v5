@@ -9,22 +9,6 @@ local function trim(s: string): string
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
-local function getPrefix(): string
-    local val = noctalia.getConfig("prefix")
-    if type(val) == "string" and val ~= "" then
-        return val
-    end
-    return "win"
-end
-
-local function isGlobalSearchEnabled(): boolean
-    local val = noctalia.getConfig("include_in_global_search")
-    if type(val) == "boolean" then
-        return val
-    end
-    return true
-end
-
 -- Resolve application icon name directly from app_id.
 -- Noctalia launcher resolves icon theme names natively via QIcon at render time.
 local function resolveAppIcon(appId: any): string?

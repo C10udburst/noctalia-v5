@@ -13,16 +13,3 @@ prefix = "wind"
 glyph = "app-window"
 include_in_global_search = true
 debounce_ms = 50
-[[setting]]
-key = "prefix"
-type = "string"
-label_key = "settings.prefix.label"
-description_key = "settings.prefix.description"
-default = "win"
-
-[[setting]]
-key = "include_in_global_search"
-type = "bool"
-label_key = "settings.include_in_global_search.label"
-description_key = "settings.include_in_global_search.description"
-default = true
