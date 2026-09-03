@@ -1,0 +1,15 @@
+id = "cloudburst/unicode"
+name = "Unicode"
+version = "1.0.0"
+description = "Search and copy Unicode characters using Python"
+author = "cloudburst"
+license = "MIT"
+plugin_api = 26
+
+[[launcher_provider]]
+id = "unicode"
+entry = "launcher.luau"
+prefix = "uni"
+glyph = "typography"
+include_in_global_search = false
+debounce_ms = 80

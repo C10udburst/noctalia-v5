@@ -6,3 +6,20 @@ description = "DriftWM infinite canvas viewport widget and declarative UI minima
 author = "cloudburst"
 license = "MIT"
 plugin_api = 26
+
+[[plugin]]
+id = "cloudburst/driftwm-windows"
+name = "DriftWM Windows"
+version = "1.0.0"
+description = "Window switcher and launcher action for DriftWM"
+author = "cloudburst"
+license = "MIT"
+plugin_api = 26
+[[plugin]]
+id = "cloudburst/unicode"
+name = "Unicode"
+version = "1.0.0"
+description = "Search and copy Unicode characters using Python"
+author = "cloudburst"
+license = "MIT"
+plugin_api = 26
