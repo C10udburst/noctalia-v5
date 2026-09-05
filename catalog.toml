@@ -23,3 +23,12 @@ description = "Search and copy Unicode characters using Python"
 author = "cloudburst"
 license = "MIT"
 plugin_api = 26
+
+[[plugin]]
+id = "cloudburst/nix"
+name = "Nix Launcher"
+version = "1.0.0"
+description = "Search, build and launch Nix packages with desktop entries"
+author = "cloudburst"
+license = "MIT"
+plugin_api = 26

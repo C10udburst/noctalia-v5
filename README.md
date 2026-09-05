@@ -11,6 +11,7 @@ A collection of native **Noctalia (v5+)** plugins designed for the Noctalia desk
 | [**DriftWM Minimap**](#driftwm-minimap) | `cloudburst/driftwm`         | Bar Widget & Panel | Infinite canvas viewport widget and declarative UI minimap panel for DriftWM. |
 | [**DriftWM Windows**](#driftwm-windows) | `cloudburst/driftwm-windows` | Launcher Provider  | Window switcher and search action (`/win`) for open DriftWM windows.          |
 | [**Unicode Search**](#unicode-search)   | `cloudburst/unicode`         | Launcher Provider  | Fast Python-powered Unicode character search and clipboard picker (`/uni`).   |
+| [**Nix Launcher**](#nix-launcher)       | `cloudburst/nix`             | Launcher Provider  | Search, build, and launch Nixpkgs desktop applications (`/nix`).              |
 
 ---
 
@@ -83,6 +84,27 @@ A fast, Python-powered Unicode search provider for the Noctalia launcher.
 
 ---
 
+## Nix Launcher
+
+A native Noctalia launcher provider that indexes all Nixpkgs packages containing `.desktop` files using `nix-locate`, and allows instant searching, building, and launching with progress notifications.
+
+### Features
+
+- **Launcher Action (`/nix`)**:
+  - Type `/nix` followed by your query to search desktop apps across Nixpkgs.
+  - Matches against both package names and desktop file names using Noctalia's native fuzzy matcher.
+- **Fast Local Caching**:
+  - Caches `nix-locate` results in `/tmp/nix-desktop-locate.cache` and pre-parsed packages in `/tmp/nix-desktop-index.json`.
+- **Live Build Notifications**:
+  - Builds on demand via `nix build --no-link --print-out-paths nixpkgs#<pkg>`.
+  - Streams build and download progress into desktop notifications via `notify-send`.
+- **Automated Desktop Launching & Disambiguation**:
+  - Single desktop file: immediately launches the application.
+  - Multiple desktop files: displays a picker menu (`noctalia dmenu` / `rofi`) showing application `Name` as title and `.desktop` file as subtitle.
+  - No desktop file: falls back to `nix run nixpkgs#<pkg>`.
+
+---
+
 ## Installation
 
 Add this repository as a local plugin source in Noctalia:
@@ -98,4 +120,5 @@ Enable individual plugins:
 noctalia msg plugins enable cloudburst/driftwm
 noctalia msg plugins enable cloudburst/driftwm-windows
 noctalia msg plugins enable cloudburst/unicode
+noctalia msg plugins enable cloudburst/nix
 ```
