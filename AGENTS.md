@@ -31,7 +31,7 @@ This repository contains native **Noctalia (v5+)** plugins and desktop extension
    description = "Plugin description"
    author = "cloudburst"
    license = "MIT"
-   plugin_api = 26
+   plugin_api = 31
 
    [[launcher_provider]]
    id = "my-provider"
@@ -60,7 +60,7 @@ This repository contains native **Noctalia (v5+)** plugins and desktop extension
    description = "Plugin description"
    author = "cloudburst"
    license = "MIT"
-   plugin_api = 26
+   plugin_api = 31
    ```
 
 5. **Load & Test in Noctalia**:

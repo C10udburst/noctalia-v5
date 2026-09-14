@@ -53,7 +53,7 @@ version = "1.0.0"
 description = "Window switcher and launcher action for DriftWM"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
 
 [[launcher_provider]]
 id = "windows"

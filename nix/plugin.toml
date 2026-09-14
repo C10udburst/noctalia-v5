@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Search, build and launch Nix packages with desktop entries"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
 
 [[launcher_provider]]
 id = "nix"
@@ -12,4 +12,4 @@ entry = "launcher.luau"
 prefix = "nix"
 glyph = "package"
 include_in_global_search = false
-debounce_ms = 80
+debounce_ms = 120

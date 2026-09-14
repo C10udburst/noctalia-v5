@@ -2,9 +2,9 @@
 """
 Nix Desktop Packages Indexer for Noctalia Launcher.
 
-1. Ensures the nix-index database is present in /tmp/nix-index/files
-   (reusing ~/.cache/nix-index/files if available, or downloading the latest
-   prebuilt database from nix-community/nix-index-database if missing).
+1. Ensures the nix-index database is present in ~/.cache/nix-index/files
+   (reusing existing database or downloading the latest prebuilt database
+   from nix-community/nix-index-database if missing).
 2. Runs nix-locate to discover all nixpkgs packages containing .desktop files.
 3. Caches raw output in /tmp/nix-desktop-locate.cache.
 4. Generates an optimized JSON index in /tmp/nix-desktop-index.json.
@@ -23,9 +23,9 @@ TMP_DIR = "/tmp"
 CACHE_FILE = os.path.join(TMP_DIR, "nix-desktop-locate.cache")
 INDEX_FILE = os.path.join(TMP_DIR, "nix-desktop-index.json")
 
-TMP_INDEX_DIR = os.path.join(TMP_DIR, "nix-index")
-TMP_INDEX_FILE = os.path.join(TMP_INDEX_DIR, "files")
-USER_INDEX_FILE = os.path.expanduser("~/.cache/nix-index/files")
+CACHE_HOME = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+NIX_INDEX_DIR = os.path.join(CACHE_HOME, "nix-index")
+NIX_INDEX_FILE = os.path.join(NIX_INDEX_DIR, "files")
 
 
 def send_notification(summary, body):
@@ -54,35 +54,22 @@ def get_system_arch():
 
 def ensure_nix_index_db():
     """
-    Ensure a nix-index database exists.
-    Checks /tmp/nix-index/files, then ~/.cache/nix-index/files.
-    If neither exists, downloads the prebuilt index from nix-index-database.
+    Ensure a nix-index database exists in ~/.cache/nix-index/files.
+    If missing, downloads the prebuilt database from nix-community/nix-index-database.
     """
-    if os.path.exists(TMP_INDEX_FILE) and os.path.getsize(TMP_INDEX_FILE) > 0:
-        return TMP_INDEX_DIR
+    if os.path.exists(NIX_INDEX_FILE) and os.path.getsize(NIX_INDEX_FILE) > 0:
+        return NIX_INDEX_DIR
 
-    # If the user already has ~/.cache/nix-index/files, link it to /tmp/nix-index
-    if os.path.exists(USER_INDEX_FILE) and os.path.getsize(USER_INDEX_FILE) > 0:
-        os.makedirs(TMP_INDEX_DIR, exist_ok=True)
-        try:
-            if os.path.islink(TMP_INDEX_FILE) or os.path.exists(TMP_INDEX_FILE):
-                os.remove(TMP_INDEX_FILE)
-            os.symlink(USER_INDEX_FILE, TMP_INDEX_FILE)
-            return TMP_INDEX_DIR
-        except Exception:
-            return os.path.dirname(USER_INDEX_FILE)
-
-    # Neither exists: download the prebuilt index database from GitHub releases
-    os.makedirs(TMP_INDEX_DIR, exist_ok=True)
+    os.makedirs(NIX_INDEX_DIR, exist_ok=True)
     arch = get_system_arch()
     url = f"https://github.com/nix-community/nix-index-database/releases/latest/download/index-{arch}"
 
     send_notification(
         "Nix Launcher",
-        f"Downloading prebuilt Nix index database for {arch} into /tmp..."
+        f"Downloading prebuilt Nix index database for {arch} into {NIX_INDEX_DIR}..."
     )
 
-    temp_download = TMP_INDEX_FILE + ".download"
+    temp_download = NIX_INDEX_FILE + ".download"
     try:
         req = urllib.request.Request(
             url,
@@ -91,9 +78,9 @@ def ensure_nix_index_db():
         with urllib.request.urlopen(req) as resp, open(temp_download, "wb") as out_f:
             shutil.copyfileobj(resp, out_f)
 
-        os.replace(temp_download, TMP_INDEX_FILE)
+        os.replace(temp_download, NIX_INDEX_FILE)
         send_notification("Nix Launcher", "Nix index database downloaded successfully.")
-        return TMP_INDEX_DIR
+        return NIX_INDEX_DIR
     except Exception as e:
         if os.path.exists(temp_download):
             try:
@@ -154,7 +141,13 @@ def build_index(raw_output):
         else:
             subtitle = f"{dfiles[0]} (+{len(dfiles)-1} more)"
 
-        items.append({"pkg": pkg, "desktop_files": dfiles, "subtitle": subtitle})
+        items.append({
+            "pkg": pkg,
+            "desktop_files": dfiles,
+            "subtitle": subtitle,
+            "lower_pkg": pkg.lower(),
+            "lower_sub": subtitle.lower(),
+        })
 
     return items
 

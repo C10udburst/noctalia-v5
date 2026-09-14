@@ -5,7 +5,7 @@ version = "1.0.0"
 description = "DriftWM infinite canvas viewport widget and declarative UI minimap panel for Noctalia"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
 
 [[plugin]]
 id = "cloudburst/driftwm-windows"
@@ -14,7 +14,8 @@ version = "1.0.0"
 description = "Window switcher and launcher action for DriftWM"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
+
 [[plugin]]
 id = "cloudburst/unicode"
 name = "Unicode"
@@ -22,7 +23,7 @@ version = "1.0.0"
 description = "Search and copy Unicode characters using Python"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
 
 [[plugin]]
 id = "cloudburst/nix"
@@ -31,4 +32,4 @@ version = "1.0.0"
 description = "Search, build and launch Nix packages with desktop entries"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31

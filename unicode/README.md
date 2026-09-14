@@ -45,7 +45,7 @@ version = "1.0.0"
 description = "Search and copy Unicode characters using Python"
 author = "cloudburst"
 license = "MIT"
-plugin_api = 26
+plugin_api = 31
 
 [[launcher_provider]]
 id = "unicode"
