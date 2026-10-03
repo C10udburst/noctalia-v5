@@ -28,8 +28,8 @@ plugin_api = 31
 [[plugin]]
 id = "cloudburst/nix"
 name = "Nix Launcher"
-version = "1.0.0"
-description = "Search, build and launch Nix packages with desktop entries"
+version = "1.1.0"
+description = "Fast fuzzy search, build and launch Nix packages with desktop entries via fzf"
 author = "cloudburst"
 license = "MIT"
 plugin_api = 31

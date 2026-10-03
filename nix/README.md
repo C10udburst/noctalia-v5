@@ -1,20 +1,25 @@
 # Nix Launcher
 
-A Noctalia launcher provider plugin that discovers, searches, builds, and launches Nixpkgs applications containing `.desktop` files.
+A high-performance Noctalia launcher provider plugin that discovers, fuzzy searches, builds, and launches Nixpkgs applications containing `.desktop` files using `fzf`.
 
 ## Features
 
 - **Launcher Action (`/nix`)**:
   - Type `/nix` followed by a search query to search across all Nixpkgs desktop packages.
   - Type `/nix` with an empty query to inspect total indexed applications.
-- **Fast Local Indexing via `nix-locate`**:
-  - Scans for all packages providing files under `share/applications/*.desktop`.
-  - Caches raw output to `/tmp/nix-desktop-locate.cache` and parsed index to `/tmp/nix-desktop-index.json`.
-  - Instant in-memory fuzzy searching using Noctalia's native `noctalia.fuzzyScore`.
+- **Ultra-Fast Fuzzy Search via `fzf`**:
+  - Offloads fuzzy matching to native `fzf` via an asynchronous runner (`search.sh`), returning results in ~10–15ms.
+  - Supports multi-word matching, prefixes (`^`), exact tokens (`'`), suffixes (`$`), and negative matches (`!`).
+  - Optimized tiebreaking (`--tiebreak=begin,length,index`) ensuring package name starts rank first.
+  - Non-blocking execution prevents any UI stutter or frame drops while typing.
+- **Persistent & Intelligent Local Indexing**:
+  - Discovers all nixpkgs packages containing `.desktop` files via `nix-locate`.
+  - Automatically caches the raw output and optimized TSV index in `~/.cache/noctalia-nix/`, surviving system reboots.
+  - Re-uses index if newer than `~/.cache/nix-index/files` to avoid re-running `nix-locate` unnecessarily.
 - **Package & Desktop File Presentation**:
-  - Displays package name with `.out` removed as the title (e.g. `gimp`, `wireshark`, `zynaddsubfx`).
+  - Displays package name with `.out` removed as the title (e.g. `gimp`, `wireshark`, `libreoffice`).
   - Displays `.desktop` filename as the subtitle (e.g. `org.gimp.GIMP.desktop`).
-  - Allows fuzzy searching by both package name and desktop filename.
+  - Matches across package names, primary desktop file, and any secondary desktop files.
 - **Automated `nix build` & Live Notifications**:
   - On activation, runs `nix build --no-link --print-out-paths nixpkgs#<pkg>`.
   - Streams build and download progress lines into desktop notifications via `notify-send`.

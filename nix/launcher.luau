@@ -1,18 +1,28 @@
 --!nonstrict
 -- Nix package launcher provider for Noctalia.
--- Discovers packages with .desktop files via nix-locate, caches in /tmp,
--- searches via noctalia.fuzzyScore, and launches via launch.py.
+-- High-performance fuzzy search powered by fzf and cached Nix desktop index.
 
-local items: { any } = {}
-local isLoaded: boolean = false
-local isIndexing: boolean = false
+local inFlight: boolean = false
 local pendingQuery: string? = nil
+local isIndexing: boolean = false
 
-local INDEX_FILE = "/tmp/nix-desktop-index.json"
-local MAX_RESULTS = 50
+local CACHE_DIR = (noctalia.getenv and noctalia.getenv("XDG_CACHE_HOME"))
+if not CACHE_DIR or CACHE_DIR == "" then
+    CACHE_DIR = (noctalia.expandPath and noctalia.expandPath("~/.cache")) or os.getenv("HOME") .. "/.cache"
+end
+
+local INDEX_TSV = CACHE_DIR .. "/noctalia-nix/nix-desktop-index.tsv"
+local COUNT_FILE = CACHE_DIR .. "/noctalia-nix/count.txt"
+
+local cachedCount: number? = nil
 
 local function trim(s: string): string
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function getSearchScript(): string
+    local dir = noctalia.pluginDir() or "."
+    return dir .. "/search.sh"
 end
 
 local function getIndexerScript(): string
@@ -25,94 +35,30 @@ local function getLaunchScript(): string
     return dir .. "/launch.py"
 end
 
-local function isSubsequence(pat: string, patLen: number, str: string, strLen: number): boolean
-    local p = 1
-    for s = 1, strLen do
-        if string.byte(str, s) == string.byte(pat, p) then
-            p = p + 1
-            if p > patLen then
-                return true
-            end
-        end
+local function resolveIndexFile(): string?
+    if noctalia.fileExists and noctalia.fileExists(INDEX_TSV) then
+        return INDEX_TSV
     end
-    return false
+    return nil
 end
 
-local function canMatch(pat: string, patLen: number, str: string, strLen: number, c0: string, cLast: string?): boolean
-    if patLen > strLen then
-        return false
+local function getIndexedCount(): number
+    if cachedCount and cachedCount > 0 then
+        return cachedCount
     end
-    if not string.find(str, c0, 1, true) then
-        return false
-    end
-    if patLen == 1 then
-        return true
-    end
-    if cLast and not string.find(str, cLast, 1, true) then
-        return false
-    end
-    return isSubsequence(pat, patLen, str, strLen)
-end
 
-local function insertTopResult(topList: { any }, item: any, score: number)
-    local count = #topList
-    if count < MAX_RESULTS then
-        local insertIdx = count + 1
-        for i = 1, count do
-            if score > topList[i].score then
-                insertIdx = i
-                break
+    if noctalia.fileExists and noctalia.fileExists(COUNT_FILE) then
+        local raw = noctalia.readFile(COUNT_FILE)
+        if raw then
+            local n = tonumber(trim(raw))
+            if n and n > 0 then
+                cachedCount = n
+                return n
             end
         end
-        table.insert(topList, insertIdx, {
-            id = item.pkg,
-            title = item.pkg,
-            subtitle = item.subtitle,
-            glyph = "package",
-            score = score,
-        })
-    else
-        local insertIdx = MAX_RESULTS
-        for i = 1, MAX_RESULTS - 1 do
-            if score > topList[i].score then
-                insertIdx = i
-                break
-            end
-        end
-        table.insert(topList, insertIdx, {
-            id = item.pkg,
-            title = item.pkg,
-            subtitle = item.subtitle,
-            glyph = "package",
-            score = score,
-        })
-        topList[MAX_RESULTS + 1] = nil
     end
-end
 
-local function tryLoadIndex(): boolean
-    if noctalia.fileExists and noctalia.fileExists(INDEX_FILE) then
-        local raw = noctalia.readFile(INDEX_FILE)
-        if raw and raw ~= "" then
-            local parsed, err = noctalia.json.decode(raw)
-            if parsed and type(parsed) == "table" then
-                for _, item in ipairs(parsed) do
-                    local lPkg = item.lower_pkg or string.lower(item.pkg or "")
-                    local lSub = item.lower_sub or string.lower(item.subtitle or "")
-                    item.lowerPkg = lPkg
-                    item.lowerSub = lSub
-                    item.pkgLen = #lPkg
-                    item.subLen = #lSub
-                end
-                items = parsed
-                isLoaded = true
-                return true
-            else
-                noctalia.log("nix-launcher: failed to decode index json: " .. tostring(err))
-            end
-        end
-    end
-    return false
+    return 3000
 end
 
 local function runIndexer(callback: (() -> ())?)
@@ -126,7 +72,7 @@ local function runIndexer(callback: (() -> ())?)
     noctalia.runAsync({"python3", script}, function(result)
         isIndexing = false
         if result.exitCode == 0 then
-            tryLoadIndex()
+            cachedCount = nil -- Invalidate count so it reloads fresh
         else
             noctalia.log("nix-launcher: indexer failed: " .. tostring(result.stderr))
         end
@@ -137,15 +83,16 @@ local function runIndexer(callback: (() -> ())?)
     end)
 end
 
--- Attempt to load index immediately if present in /tmp
-if not tryLoadIndex() then
+-- Check index on plugin load
+if not resolveIndexFile() then
     runIndexer()
 end
 
-local function performSearch(query: string)
+local function executeSearch(query: string)
     local text = trim(query)
+    local indexFile = resolveIndexFile()
 
-    if not isLoaded then
+    if not indexFile then
         if isIndexing then
             launcher.setResults(query, {
                 {
@@ -157,7 +104,7 @@ local function performSearch(query: string)
             })
         else
             runIndexer(function()
-                performSearch(query)
+                executeSearch(query)
             end)
             launcher.setResults(query, {
                 {
@@ -172,106 +119,102 @@ local function performSearch(query: string)
     end
 
     if text == "" then
+        local count = getIndexedCount()
         launcher.setResults(query, {
             {
                 id = "",
                 title = "Search Nix Packages",
-                subtitle = string.format("Indexed %d desktop packages. Type package or app name...", #items),
+                subtitle = string.format("Indexed %d desktop packages. Type package or app name...", count),
                 glyph = "package",
             },
         })
         return
     end
 
-    local patLower = string.lower(text)
-    local patLen = #patLower
-    local c0 = string.sub(patLower, 1, 1)
-    local cLast = (patLen >= 3) and string.sub(patLower, patLen, patLen) or nil
+    inFlight = true
+    local searchScript = getSearchScript()
 
-    local hasSpace = string.find(patLower, "%s") ~= nil
-    local compactPat = nil
-    local compactLen = 0
-    local compactC0 = nil
-    local compactCLast = nil
-    if hasSpace then
-        compactPat = string.gsub(patLower, "%s+", "")
-        compactLen = #compactPat
-        if compactLen > 0 then
-            compactC0 = string.sub(compactPat, 1, 1)
-            compactCLast = (compactLen >= 3) and string.sub(compactPat, compactLen, compactLen) or nil
-        end
-    end
+    noctalia.runAsync({"sh", searchScript, text, indexFile, "50"}, function(result)
+        inFlight = false
 
-    local topResults: { any } = {}
-    local minScore = -99999999
-    local hasFullList = false
-
-    for _, item in ipairs(items) do
-        local pkgName = item.pkg or ""
-        local subtitle = item.subtitle or ""
-        local lPkg = item.lowerPkg
-        local lSub = item.lowerSub
-        local pLen = item.pkgLen
-        local sLen = item.subLen
-
-        local score = nil
-
-        -- 1. Check if package name can match
-        local canPkg = canMatch(patLower, patLen, lPkg, pLen, c0, cLast)
-        if not canPkg and hasSpace and compactPat then
-            canPkg = canMatch(compactPat, compactLen, lPkg, pLen, compactC0, compactCLast)
+        -- If a newer query arrived while this was executing, process that query
+        if pendingQuery ~= nil then
+            local nextQuery = pendingQuery
+            pendingQuery = nil
+            executeSearch(nextQuery)
+            return
         end
 
-        if canPkg then
-            score = noctalia.fuzzyScore(text, pkgName)
+        if result.exitCode ~= 0 and (not result.stdout or result.stdout == "") then
+            launcher.setResults(query, {
+                {
+                    id = "",
+                    title = "Search Error",
+                    subtitle = (result.stderr and result.stderr ~= "") and result.stderr or "Search process failed",
+                    glyph = "alert-triangle",
+                },
+            })
+            return
         end
 
-        -- 2. If no pkg match, check subtitle
-        if score == nil and subtitle ~= "" then
-            local canSub = canMatch(patLower, patLen, lSub, sLen, c0, cLast)
-            if not canSub and hasSpace and compactPat then
-                canSub = canMatch(compactPat, compactLen, lSub, sLen, compactC0, compactCLast)
-            end
+        local rawLines = string.split(result.stdout or "", "\n")
+        local results = {}
+        local rank = 0
 
-            if canSub then
-                local subScore = noctalia.fuzzyScore(text, subtitle)
-                if subScore ~= nil then
-                    score = subScore - 50
+        for _, line in ipairs(rawLines) do
+            local trimmed = trim(line)
+            if trimmed ~= "" then
+                rank = rank + 1
+                local tab1 = string.find(trimmed, "\t", 1, true)
+                local pkg: string
+                local subtitle: string
+
+                if tab1 then
+                    pkg = string.sub(trimmed, 1, tab1 - 1)
+                    local tab2 = string.find(trimmed, "\t", tab1 + 1, true)
+                    if tab2 then
+                        subtitle = string.sub(trimmed, tab1 + 1, tab2 - 1)
+                    else
+                        subtitle = string.sub(trimmed, tab1 + 1)
+                    end
+                else
+                    pkg = trimmed
+                    subtitle = ""
                 end
+
+                table.insert(results, {
+                    id = pkg,
+                    title = pkg,
+                    subtitle = subtitle,
+                    glyph = "package",
+                    score = 1000 - rank,
+                })
             end
         end
 
-        if score ~= nil then
-            if not hasFullList then
-                insertTopResult(topResults, item, score)
-                if #topResults == MAX_RESULTS then
-                    hasFullList = true
-                    minScore = topResults[MAX_RESULTS].score
-                end
-            elseif score > minScore then
-                insertTopResult(topResults, item, score)
-                minScore = topResults[MAX_RESULTS].score
-            end
+        if #results == 0 then
+            launcher.setResults(query, {
+                {
+                    id = "",
+                    title = "No matching packages",
+                    subtitle = "No Nix desktop packages matched '" .. text .. "'",
+                    glyph = "search-off",
+                },
+            })
+            return
         end
-    end
 
-    if #topResults == 0 then
-        launcher.setResults(query, {
-            {
-                id = "",
-                title = "No matching packages",
-                subtitle = "No Nix desktop packages matched '" .. text .. "'",
-                glyph = "search-off",
-            },
-        })
-        return
-    end
-
-    launcher.setResults(query, topResults)
+        launcher.setResults(query, results)
+    end)
 end
 
 function onQuery(query: string)
-    performSearch(query)
+    if inFlight then
+        pendingQuery = query
+        return
+    end
+
+    executeSearch(query)
 end
 
 function onActivate(id: string)

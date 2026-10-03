@@ -6,24 +6,25 @@ Nix Desktop Packages Indexer for Noctalia Launcher.
    (reusing existing database or downloading the latest prebuilt database
    from nix-community/nix-index-database if missing).
 2. Runs nix-locate to discover all nixpkgs packages containing .desktop files.
-3. Caches raw output in /tmp/nix-desktop-locate.cache.
-4. Generates an optimized JSON index in /tmp/nix-desktop-index.json.
+3. Caches raw output in ~/.cache/noctalia-nix/nix-desktop-locate.cache.
+4. Generates an ultra-fast TSV index (~/.cache/noctalia-nix/nix-desktop-index.tsv) for fzf.
 """
 
 import sys
 import os
-import re
-import json
 import shutil
 import platform
 import subprocess
 import urllib.request
 
-TMP_DIR = "/tmp"
-CACHE_FILE = os.path.join(TMP_DIR, "nix-desktop-locate.cache")
-INDEX_FILE = os.path.join(TMP_DIR, "nix-desktop-index.json")
-
 CACHE_HOME = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
+NOCTALIA_CACHE_DIR = os.path.join(CACHE_HOME, "noctalia-nix")
+os.makedirs(NOCTALIA_CACHE_DIR, exist_ok=True)
+
+CACHE_FILE = os.path.join(NOCTALIA_CACHE_DIR, "nix-desktop-locate.cache")
+INDEX_TSV = os.path.join(NOCTALIA_CACHE_DIR, "nix-desktop-index.tsv")
+COUNT_FILE = os.path.join(NOCTALIA_CACHE_DIR, "count.txt")
+
 NIX_INDEX_DIR = os.path.join(CACHE_HOME, "nix-index")
 NIX_INDEX_FILE = os.path.join(NIX_INDEX_DIR, "files")
 
@@ -92,9 +93,11 @@ def ensure_nix_index_db():
 
 def run_nix_locate(db_dir, force=False):
     """Run nix-locate or reuse cached output if valid."""
+    db_file = os.path.join(db_dir, "files")
     if not force and os.path.exists(CACHE_FILE) and os.path.getsize(CACHE_FILE) > 0:
-        with open(CACHE_FILE, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
+        if not os.path.exists(db_file) or os.path.getmtime(CACHE_FILE) >= os.path.getmtime(db_file):
+            with open(CACHE_FILE, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
 
     cmd = [
         "nix-locate",
@@ -107,31 +110,27 @@ def run_nix_locate(db_dir, force=False):
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     raw_output = result.stdout
 
-    # Cache raw output in /tmp
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         f.write(raw_output)
 
     return raw_output
 
 
-def build_index(raw_output):
-    """Parse nix-locate lines and group by package without .out suffix."""
+def build_tsv(raw_output):
+    """Parse nix-locate lines and build TSV format directly."""
     pkgs = {}
     for line in raw_output.splitlines():
         parts = line.split()
         if len(parts) >= 4:
-            pkg_raw = parts[0]
-            # Strip .out suffix
-            pkg = re.sub(r"\.out$", "", pkg_raw)
-            path = parts[-1]
-            desktop_file = path.split("/")[-1]
+            pkg = parts[0].removesuffix(".out")
+            desktop_file = parts[-1].rsplit("/", 1)[-1]
 
             if pkg not in pkgs:
-                pkgs[pkg] = []
-            if desktop_file not in pkgs[pkg]:
+                pkgs[pkg] = [desktop_file]
+            elif desktop_file not in pkgs[pkg]:
                 pkgs[pkg].append(desktop_file)
 
-    items = []
+    tsv_lines = []
     for pkg in sorted(pkgs.keys()):
         dfiles = pkgs[pkg]
         if len(dfiles) == 1:
@@ -141,15 +140,22 @@ def build_index(raw_output):
         else:
             subtitle = f"{dfiles[0]} (+{len(dfiles)-1} more)"
 
-        items.append({
-            "pkg": pkg,
-            "desktop_files": dfiles,
-            "subtitle": subtitle,
-            "lower_pkg": pkg.lower(),
-            "lower_sub": subtitle.lower(),
-        })
+        # Format: <pkg>\t<subtitle>\t<all_desktop_files>
+        df_all = " ".join(dfiles)
+        tsv_lines.append(f"{pkg}\t{subtitle}\t{df_all}\n")
 
-    return items
+    return len(pkgs), tsv_lines
+
+
+def write_atomic(filepath, content):
+    """Atomically write content to file."""
+    temp_path = filepath + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        if isinstance(content, list):
+            f.writelines(content)
+        else:
+            f.write(str(content))
+    os.replace(temp_path, filepath)
 
 
 def main():
@@ -157,27 +163,15 @@ def main():
     try:
         db_dir = ensure_nix_index_db()
         raw = run_nix_locate(db_dir=db_dir, force=force)
-        items = build_index(raw)
+        count, tsv_lines = build_tsv(raw)
 
-        # Atomically write index to /tmp
-        temp_file = INDEX_FILE + ".tmp"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(items, f)
-        os.replace(temp_file, INDEX_FILE)
+        # Write TSV index (for fzf) and count
+        write_atomic(INDEX_TSV, tsv_lines)
+        write_atomic(COUNT_FILE, f"{count}\n")
 
-        print(
-            json.dumps(
-                {
-                    "ok": True,
-                    "count": len(items),
-                    "db_dir": db_dir,
-                    "cache_file": CACHE_FILE,
-                    "index_file": INDEX_FILE,
-                }
-            )
-        )
+        print(f'{{"ok": true, "count": {count}, "db_dir": "{db_dir}", "tsv_file": "{INDEX_TSV}"}}')
     except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)}), file=sys.stderr)
+        print(f'{{"ok": false, "error": "{str(e)}"}}', file=sys.stderr)
         sys.exit(1)
 
 
