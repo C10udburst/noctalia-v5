@@ -28,6 +28,7 @@ A clickable bar widget and an interactive Declarative UI Minimap panel for the *
 - **Clickable Bar Widget**:
   - Displays real-time zoom level in `0.8x`, `1.0x`, `1.5x` format.
   - Displays current monitor camera coordinates `(X, Y)`.
+  - **Auto-hides** and stays out of the bar whenever the DriftWM IPC cannot be reached; reappears once DriftWM responds.
 - **Mouse & Gesture Actions on Bar Widget**:
   - **Left Click**: Toggles the Minimap Panel.
   - **Right Click**: Triggers `zoom-to-fit`.

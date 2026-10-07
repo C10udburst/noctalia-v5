@@ -8,7 +8,8 @@ A native **Noctalia (v5+)** plugin that adds a clickable bar widget and an inter
 - **Clickable Bar Widget**:
   - Displays real-time zoom level in `0.8x`, `1.0x`, `1.5x` format.
   - Displays current monitor camera coordinates `(X, Y)`.
-  - **Clean Aesthetic**: No status dot indicator during normal operation; displays a warning icon only on error.
+  - **Clean Aesthetic**: No status dot indicator during normal operation.
+  - **Auto-hide when offline**: If the DriftWM IPC state cannot be read (compositor not running, state file missing, or still initialising), the widget hides itself via `barWidget.setVisible(false)` and renders nothing in the bar. It keeps polling and reappears automatically once DriftWM responds; click/scroll actions are ignored while offline.
 - **Mouse & Gesture Actions on Bar Widget**:
   - **Left Click**: Toggles the Minimap Panel.
   - **Right Click**: Triggers `zoom-to-fit`.

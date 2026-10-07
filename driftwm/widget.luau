@@ -4,16 +4,19 @@ local state = {
     y = 0,
     output = "",
     hasError = false,
-    errorMessage = ""
+    errorMessage = "",
+    visible = true
 }
 
 local driftwm = require("./driftwm.luau")
 
 local function execDriftAction(actionName)
+    if state.hasError then return end
     driftwm.execAction(actionName)
 end
 
 function onWidgetClick()
+    if state.hasError then return end
     noctalia.togglePanel("cloudburst/driftwm:minimap")
 end
 
@@ -36,9 +39,12 @@ end
 local function readDriftWMState()
     local parsed, err = driftwm.readState()
     if err then
+        -- DriftWM IPC is unreachable (compositor not running, socket/state file
+        -- missing, or still initialising). Stay invisible instead of showing an
+        -- error capsule in the bar.
         state.hasError = true
         state.errorMessage = err
-        return
+        return false
     end
 
     state.hasError = false
@@ -47,9 +53,26 @@ local function readDriftWMState()
     state.x = parsed.x
     state.y = parsed.y
     state.output = parsed.output
+    return true
+end
+
+local function setBarVisible(visible)
+    if state.visible == visible then return end
+    state.visible = visible
+    if barWidget and type(barWidget.setVisible) == "function" then
+        barWidget.setVisible(visible)
+    end
 end
 
 function renderWidget()
+    if state.hasError then
+        setBarVisible(false)
+        -- Empty tree: nothing to draw even if the host ignores setVisible.
+        barWidget.render(ui.row({ gap = 0, align = "center" }, {}))
+        return
+    end
+
+    setBarVisible(true)
 
     local isVert = false
     if type(barWidget.isVertical) == "function" then
@@ -61,32 +84,18 @@ function renderWidget()
     local container = isVert and ui.column or ui.row
     local children = {}
 
-    if state.hasError then
-        table.insert(children, ui.glyph({
-            name = "alert-circle",
-            size = 13,
-            color = "error"
-        }))
-        table.insert(children, ui.label({
-            text = state.errorMessage,
-            fontSize = 11,
-            color = "error",
-            fontWeight = "bold"
-        }))
-    else
-        table.insert(children, ui.label({
-            text = string.format("%.1fx", state.zoom),
-            fontSize = 12,
-            fontWeight = "bold",
-            color = "primary"
-        }))
+    table.insert(children, ui.label({
+        text = string.format("%.1fx", state.zoom),
+        fontSize = 12,
+        fontWeight = "bold",
+        color = "primary"
+    }))
 
-        table.insert(children, ui.label({
-            text = string.format("(%d, %d)", state.x, state.y),
-            fontSize = 11,
-            color = "on_surface_variant"
-        }))
-    end
+    table.insert(children, ui.label({
+        text = string.format("(%d, %d)", state.x, state.y),
+        fontSize = 11,
+        color = "on_surface_variant"
+    }))
 
     barWidget.render(container({
         gap = 6,
